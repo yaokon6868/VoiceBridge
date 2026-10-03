@@ -1,6 +1,22 @@
 # VoiceBridge
 
-Windows 上的 ChatGPT Voice 实时字幕与 Fish Audio 换声工具。
+**给 ChatGPT Voice 换声音、加实时字幕的 Windows 工具。**
+
+我经常用 ChatGPT 语音聊天，希望它能用自己喜欢的音色回答，也希望讲话时能看到字幕，于是做了这个项目。
+
+目前已经实现：
+
+- 实时悬浮字幕，字号、透明度和位置可调。
+- 接入 Fish Audio，按逗号和短语连续朗读。
+- 使用当前免费的 `s2.1-pro-free` 模型，需要自己的 API Key。
+- 提供 Windows 安装包和桌面启动入口。
+- 不采集整个电脑的系统音频。
+
+现在开放 **0.3.0 Beta**。核心网页换声功能已经跑通，外放回声和部分兼容性还在完善。
+
+如果你也经常使用 ChatGPT Voice，欢迎试用、反馈问题，或者参与改进。喜欢这个方向，也欢迎给项目一个 ⭐。
+
+[下载测试版](https://github.com/yaokon6868/VoiceBridge/releases/tag/v0.3.0-beta) · [反馈问题](https://github.com/yaokon6868/VoiceBridge/issues)
 
 **当前为 0.3.0 Beta。** 已在维护者电脑上验证网页采集和换声；外放回声消除、
 两套 Codex 的完整兼容性和长时间稳定性仍需测试。本项目与 OpenAI、Fish Audio
