@@ -1,0 +1,33 @@
+name: Bug report
+description: Report a reproducible failure without private data
+body:
+  - type: input
+    id: version
+    attributes:
+      label: App and extension versions
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: Voice source
+      options:
+        - ChatGPT in Chrome
+        - ChatGPT in Edge
+        - Normal Codex desktop
+        - Isolated Codex desktop
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps, expected behavior, actual result
+    validations:
+      required: true
+  - type: textarea
+    id: devices
+    attributes:
+      label: Browser, Windows version, microphone and output
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted diagnostics
+      description: Never include keys, settings files, private chats or personal screenshots.

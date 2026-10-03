@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "VoiceBridge (Beta)",
+  "version": "0.3.0",
+  "description": "ChatGPT 网页语音换声与连续字幕，本机 VoiceBridge 桥接。",
+  "background": { "service_worker": "background.js" },
+  "permissions": ["storage", "alarms", "scripting"],
+  "action": { "default_title": "VoiceBridge 连接状态", "default_popup": "popup.html" },
+  "content_scripts": [
+    { "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"], "js": ["page-hook.js"], "run_at": "document_start", "world": "MAIN" },
+    { "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"], "js": ["turn-tracker.js","content.js"], "run_at": "document_start" }
+  ],
+  "host_permissions": ["http://127.0.0.1:17892/*", "https://chatgpt.com/*", "https://chat.openai.com/*"]
+}

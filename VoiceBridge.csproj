@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <DefaultItemExcludes>$(DefaultItemExcludes);artifacts/**;release/**;ui-stage/**;ui-before-change/**</DefaultItemExcludes>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>VoiceBridge.Next</AssemblyName>
+    <RootNamespace>VoiceBridge</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="tests\**\*.cs" />
+    <EmbeddedResource Remove="tests\**\*" />
+    <None Remove="tests\**\*" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="MessagePack" Version="3.1.10" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+</Project>

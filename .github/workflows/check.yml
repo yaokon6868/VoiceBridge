@@ -1,0 +1,31 @@
+name: Windows checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+      - name: Build and offline regression checks
+        shell: pwsh
+        run: ./scripts/Check.ps1
+      - name: Build portable release
+        shell: pwsh
+        run: ./scripts/Package.ps1
+      - name: Verify isolated package installation
+        shell: pwsh
+        run: ./scripts/VerifyPackage.ps1 -PackageZip ./artifacts/VoiceBridge-Windows-x64.zip
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: VoiceBridge-Windows-x64-beta
+          path: artifacts/VoiceBridge-Windows-x64.zip

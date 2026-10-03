@@ -1,0 +1,47 @@
+<Window x:Class="VoiceBridge.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="VoiceBridge · 设置" Width="600" Height="700" MinHeight="600" WindowStartupLocation="CenterScreen" ResizeMode="CanResize" Background="#F3F6FC" FontFamily="Microsoft YaHei UI" Foreground="#1B2942">
+  <Window.Resources>
+    <Style TargetType="TextBox"><Setter Property="Padding" Value="10,7"/><Setter Property="BorderBrush" Value="#CCD5E5"/><Setter Property="Background" Value="White"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style>
+    <Style TargetType="PasswordBox"><Setter Property="Padding" Value="10,7"/><Setter Property="BorderBrush" Value="#CCD5E5"/></Style>
+    <Style TargetType="Button">
+      <Setter Property="Background" Value="#E3EAF7"/><Setter Property="Foreground" Value="#203656"/><Setter Property="Padding" Value="12,9"/><Setter Property="Cursor" Value="Hand"/><Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Opacity" Value="0.8"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="Background" Value="#BED2FA"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style TargetType="CheckBox"><Setter Property="Padding" Value="5"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style>
+  </Window.Resources>
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <Grid Margin="22">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+      <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,0,24"><TextBlock Text="VoiceBridge" FontSize="30" FontWeight="Bold"/><TextBlock Text="实时字幕 · 自然换声" Foreground="#64748B" Margin="0,5,0,0"/><TextBlock Text="Fish Audio  /  仅使用免费模型" Foreground="#3769EB" Margin="0,18,0,0"/></StackPanel>
+      <TextBlock Grid.Row="1" Text="API Key" VerticalAlignment="Center"/>
+      <PasswordBox x:Name="ApiKey" Grid.Row="1" Grid.Column="1" Margin="0,5"/>
+      <TextBlock Grid.Row="2" Text="Voice / Reference ID" VerticalAlignment="Center"/>
+      <TextBox x:Name="VoiceId" Grid.Row="2" Grid.Column="1" Margin="0,5"/>
+      <TextBlock Grid.Row="3" Text="免费模型（固定）" VerticalAlignment="Center"/>
+      <TextBox x:Name="Model" Grid.Row="3" Grid.Column="1" Margin="0,5" IsReadOnly="True" ToolTip="仅使用 s2.1-pro-free；不会切换到付费模型"/>
+      <CheckBox x:Name="EnableTts" Grid.Row="4" Grid.ColumnSpan="2" Content="启用 Fish Audio 流式朗读" Margin="0,10"/>
+      <Separator Grid.Row="5" Grid.ColumnSpan="2" Margin="0,10"/>
+      <TextBlock Grid.Row="6" Text="字幕字号" VerticalAlignment="Center"/>
+      <Slider x:Name="FontSizeSlider" Grid.Row="6" Grid.Column="1" Minimum="16" Maximum="72" TickFrequency="2" IsSnapToTickEnabled="True"/>
+      <TextBlock Grid.Row="7" Text="文字不透明度" VerticalAlignment="Center"/>
+      <Slider x:Name="TextOpacity" Grid.Row="7" Grid.Column="1" Minimum="0.2" Maximum="1"/>
+      <TextBlock Grid.Row="8" Text="背景不透明度" VerticalAlignment="Center"/>
+      <Slider x:Name="BackgroundOpacity" Grid.Row="8" Grid.Column="1" Minimum="0" Maximum="0.9"/>
+      <CheckBox x:Name="MouseThrough" Grid.Row="9" Grid.ColumnSpan="2" Content="鼠标穿透（从托盘设置位置）" Margin="0,12,0,4"/>
+      <CheckBox x:Name="WatchCodex" Grid.Row="10" Grid.ColumnSpan="2" Content="监听普通版和隔离版 Codex 桌面" Margin="0,4"/>
+      <StackPanel Grid.Row="11" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
+        <Button Content="字幕预览" Margin="0,0,10,0" Click="Preview_Click"/>
+        <Button Content="取消" Width="90" Margin="0,0,10,0" IsCancel="True"/>
+        <Button Content="保存设置" Width="100" Background="#3769EB" Foreground="White" IsDefault="True" Click="Save_Click"/>
+      </StackPanel>
+    </Grid>
+  </ScrollViewer>
+</Window>
