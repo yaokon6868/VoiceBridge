@@ -20,3 +20,12 @@ security audit has been completed.
 Never upload configuration, DPAPI ciphertext, .env, private keys, conversations or
 personal screenshots. Diagnostics may disclose device labels, time and session IDs;
 review and redact before sharing.
+
+The opt-in 0.3.1 duplex engine captures only the selected physical microphone
+and renders only VoiceBridge's Fish PCM. Microphone frames stay in volatile
+memory and flow to the virtual input; no microphone recording or upload is
+implemented by the engine. The user-selected ChatGPT/Codex voice application
+still transmits its input to its own service. The helper IPC on 17896 binds
+loopback, requires a random token and rejects browser Origins. The helper exits
+when its parent process exits. Enabling the helper keeps the selected microphone
+open until disabled or VoiceBridge exits; Windows defaults are not changed.

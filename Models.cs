@@ -27,5 +27,7 @@ public sealed class AppSettings
     public bool EnableTts { get; set; } = true;
     public bool WatchCodexDesktop { get; set; } = true;
     // Off until real speaker/microphone double-talk acceptance passes.
-    public bool ExperimentalEchoReference { get; set; } = false;
+    public bool EchoCancellationEnabled { get; set; } = false;
+    public string PhysicalMicrophone { get; set; } = "";
+    public string SpeakerDevice { get; set; } = "";
 }

@@ -17,3 +17,4 @@ foreach($file in Get-ChildItem -LiteralPath (Join-Path $checkRoot 'extension') -
     Invoke-Check 'node' @('--check',$file.FullName)
 }
 Write-Output 'All offline checks passed. No Fish API requests were made.'
+Invoke-Check 'node' @((Join-Path $checkRoot 'tests\Extension\microphone-route.cjs'),(Join-Path $checkRoot 'extension\page-hook.js'))

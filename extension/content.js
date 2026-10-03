@@ -132,11 +132,11 @@
         setActive(false);setActive(true); // Rebaseline; never replay old text after a bridge restart.
       }
       if(connected)serverInstance=health.instanceId||serverInstance;
-      window.postMessage({source:'voice-bridge-aec',ready:connected && health?.aecReady===true},location.origin);
+      window.postMessage({source:'voice-bridge-aec',ready:connected && health?.aecReady===true,enabled:connected && health?.aecEnabled===true},location.origin);
     }catch(error){connected=false;window.postMessage({source:'voice-bridge-aec',ready:false},location.origin);if(!chrome.runtime?.id || /context invalidated/i.test(String(error))){disposeBridge();return;}}
     window.postMessage({source:'voice-bridge-probe'},location.origin);
     mute();readDom();
-    if(connected) transmit({type:'web-status',sessionId:sessionId||'idle',text:JSON.stringify({version:'0.3.0',hookReady,active,networkTurn,textEvents,assistantNodes:candidates().length,hookInfo,microphone})});
+    if(connected) transmit({type:'web-status',sessionId:sessionId||'idle',text:JSON.stringify({version:'0.3.1',hookReady,active,networkTurn,textEvents,assistantNodes:candidates().length,hookInfo,microphone})});
   }
   heartbeatTimer=setInterval(heartbeat,2500);heartbeat();
   addEventListener('pagehide',()=>{if(active){send('stop');active=false;mute();}});

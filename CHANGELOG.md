@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1 candidate — duplex echo architecture
+
+- Optional bundled physical playback/microphone engine with adaptive echo reference.
+- Acoustic delay estimation when device timestamps are insufficient.
+- Speech interruption without muting the microphone; old audio epochs discarded.
+- Bounded asynchronous playback with cancellation independent of queue backpressure.
+- Stable web microphone graph with physical fallback on helper loss/restart.
+- Device selection, isolated candidate settings, offline microphone and signal checks.
+
+Not accepted as a speaker-ready release; see docs/AEC-031.md for measured limits.
+
 ## 0.3.0 Beta — publication preparation
 
 - Self-contained x64 packaging, per-user installer/uninstaller and stable shortcut.

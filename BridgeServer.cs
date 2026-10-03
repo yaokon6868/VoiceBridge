@@ -16,6 +16,7 @@ public sealed class BridgeServer : IDisposable
     private readonly Func<object>? _diagnostics;
     private readonly Func<bool> _ttsReady;
     private readonly Func<bool> _aecReady;
+    public Func<bool> EchoEnabled { get; set; } = () => false;
     private WebApplication? _app;
     private readonly string _instanceId = Guid.NewGuid().ToString("N");
     private readonly int _port;
@@ -48,7 +49,7 @@ public sealed class BridgeServer : IDisposable
             await next(context);
         });
         _app.UseWebSockets();
-        _app.MapGet("/health", () => Results.Json(new { ok = true, service = "VoiceBridge Next", version = RuntimeProfile.Version, instanceId = _instanceId, ttsReady = _ttsReady(), aecReady = _aecReady() }));
+        _app.MapGet("/health", () => Results.Json(new { ok = true, service = "VoiceBridge Next", version = RuntimeProfile.Version, instanceId = _instanceId, ttsReady = _ttsReady(), aecReady = _aecReady(), aecEnabled=EchoEnabled() }));
         _app.MapGet("/diagnostics", () => Results.Json(_diagnostics?.Invoke() ?? new { }));
         _app.MapPost("/event", (BridgeEvent ev) => { if(!ValidEvent(ev))return Results.BadRequest(); _receive(ev); return Results.Ok(); });
         _app.Map("/ws", async context =>

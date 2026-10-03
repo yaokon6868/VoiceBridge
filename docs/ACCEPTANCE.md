@@ -23,7 +23,9 @@ Fish byte and first audible audio separately; network latency is not audible lat
 Publication-preparation checks on 2026-10-03: clean source export build, complete
 offline suite, self-contained x64 ZIP, isolated installation and upgrade, unchanged
 working desktop shortcut, and out-of-scope uninstall rejection passed. The suite
-made no Fish API calls. CI workflow is included but has not run on GitHub yet.
+made no Fish API calls. The initial GitHub CI run passed. The 0.3.1 candidate
+adds AEC signal, microphone fallback and backpressure checks; actual speaker
+acceptance remains pending, tracked in [AEC-031.md](AEC-031.md).
 
 The previously running preview also reported receiver:InvalidOperationException
 with its fallback circuit open during this review. The exception's original stack

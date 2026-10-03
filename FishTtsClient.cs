@@ -32,6 +32,7 @@ public sealed class FishTtsClient : IDisposable
     private readonly MessagePackSerializerOptions _options = ContractlessStandardResolver.Options;
     public string Status { get; private set; } = "idle";
     private long _audioBytes;
+    private int _buffering;
     public long AudioBytes => Interlocked.Read(ref _audioBytes);
     private long _firstTextTimestamp;
     public double? FirstAudioMs { get; private set; }
@@ -66,6 +67,7 @@ public sealed class FishTtsClient : IDisposable
     public async Task SpeakAsync(string text)
     {
         if (!CanReplace || !_store.Value.EnableTts || string.IsNullOrWhiteSpace(text)) return;
+        if(!_playback.CanStart(_store.Value.EchoCancellationEnabled)){Status="waiting-for-echo-engine";return;}
         if (_store.Value.FishModel != AppSettings.FreeFishModel)
         {
             Status = "blocked-non-free-model";
@@ -89,7 +91,7 @@ public sealed class FishTtsClient : IDisposable
                     await Task.Delay(_firstAudioTimeout, token);
                     lock (_generationLock)
                     {
-                        if (!token.IsCancellationRequested && AudioBytes == before)
+                        if (!token.IsCancellationRequested && AudioBytes == before && Volatile.Read(ref _buffering)==0)
                             Fail(FirstAudioMs is null ? "first-audio-timeout" : "audio-progress-timeout");
                     }
                 }
@@ -141,7 +143,7 @@ public sealed class FishTtsClient : IDisposable
             throw;
         }
         token.ThrowIfCancellationRequested();
-        _playback.EnsureStarted(_store.Value.ExperimentalEchoReference, epoch);
+        _playback.EnsureStarted(_store.Value.EchoCancellationEnabled, epoch);
         await SendAsync(socket, new Dictionary<string, object?>
         {
             ["event"] = "start",
@@ -196,10 +198,14 @@ public sealed class FishTtsClient : IDisposable
                 }
                 if (TryGetAudio(map, out var audio))
                 {
+                    bool accepted;
+                    Interlocked.Increment(ref _buffering);
+                    try { accepted=await _playback.EnqueueAsync(audio,epoch,token); }
+                    finally { Interlocked.Decrement(ref _buffering); }
+                    if(!accepted)continue;
                     lock (_generationLock)
                     {
                         if(token.IsCancellationRequested)return;
-                        if(!_playback.Enqueue(audio,epoch))continue;
                         if (FirstAudioMs is null)
                             FirstAudioMs = System.Diagnostics.Stopwatch.GetElapsedTime(Interlocked.Read(ref _firstTextTimestamp)).TotalMilliseconds;
                         Interlocked.Add(ref _audioBytes, audio.Length);

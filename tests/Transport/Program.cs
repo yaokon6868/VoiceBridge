@@ -53,6 +53,11 @@ await fish.SpeakAsync("Second phrase stalls.");await Until(()=>!fish.CanReplace)
 Check(fish.Status=="audio-progress-timeout","mid-turn silent server cannot leave official voice muted indefinitely");
 fish.Retry();modes.Enqueue("silent");await fish.SpeakAsync("Cancelled timeout.");fish.Interrupt();
 await Task.Delay(450);Check(fish.CanReplace,"cancelled watchdog cannot fail a newer generation");
+fish.Retry();playback.Hold=new(TaskCreationOptions.RunContinuationsAsynchronously);modes.Enqueue("audio");
+await fish.SpeakAsync("Bounded playback backpressure.");await Until(()=>playback.Waiting);
+await Task.Delay(450);Check(fish.CanReplace,"playback backpressure is not a silent Fish server");
+fish.Interrupt();playback.Hold.TrySetResult(true);playback.Hold=null;
+await Task.Delay(100);Check(playback.Bytes==0,"interrupt cancels a pending asynchronous playback enqueue");
 await app.StopAsync();
 var routed=new List<BridgeEvent>();var router=new SessionRouter(routed.Add);
 router.Handle(new("start","web","one"));
@@ -79,10 +84,12 @@ Check(phraseOutput.Count==2 && phraseOutput[1]=="好。","actual completion pres
 sealed class FakePlayback : IAudioPlayback {
     private readonly object sync=new();public long Epoch;public int Bytes;public int Resets;
     public event Action<string>? Failed {add{} remove{}}
+    public TaskCompletionSource<bool>? Hold;public bool Waiting;
     public long BeginTurn(){lock(sync){Bytes=0;return ++Epoch;}}
     public long ResetDevice(){lock(sync){Resets++;Bytes=0;return ++Epoch;}}
     public void EnsureStarted(bool echo,long epoch){}
     public bool Enqueue(byte[] pcm,long epoch){lock(sync){if(epoch!=Epoch)return false;Bytes+=pcm.Length;return true;}}
+    public async ValueTask<bool> EnqueueAsync(byte[] pcm,long epoch,CancellationToken token){var hold=Hold;if(hold is not null){Waiting=true;await hold.Task.WaitAsync(token);}token.ThrowIfCancellationRequested();return Enqueue(pcm,epoch);}
     public object Snapshot()=>new{Bytes,Epoch};
     public void Stop()=>BeginTurn();public void Dispose(){}
 }

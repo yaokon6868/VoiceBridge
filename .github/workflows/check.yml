@@ -19,9 +19,15 @@ jobs:
       - name: Build and offline regression checks
         shell: pwsh
         run: ./scripts/Check.ps1
+      - uses: actions/setup-python@06da6279cdbca41027908073e81a4544dc79c06b
+        with:
+          python-version: '3.12'
+      - name: Build duplex echo engine and run signal checks
+        shell: pwsh
+        run: ./scripts/BuildAec.ps1
       - name: Build portable release
         shell: pwsh
-        run: ./scripts/Package.ps1
+        run: ./scripts/Package.ps1 -IncludeAec
       - name: Verify isolated package installation
         shell: pwsh
         run: ./scripts/VerifyPackage.ps1 -PackageZip ./artifacts/VoiceBridge-Windows-x64.zip

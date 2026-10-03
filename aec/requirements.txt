@@ -1,0 +1,5 @@
+pywebrtc-audio==0.2.0
+sounddevice==0.5.6
+numpy==2.5.3
+cffi==2.1.1
+pycparser==3.0

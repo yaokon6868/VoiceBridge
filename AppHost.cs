@@ -23,14 +23,14 @@ public sealed class AppHost : IDisposable
     private long _sourceTextEvents;
     private long _phrases;
     private readonly EventJournal _journal = new();
-    private bool TtsReady => _fish.CanReplace && _settings.Value.EnableTts && !string.IsNullOrWhiteSpace(_settings.GetApiKey()) && !string.IsNullOrWhiteSpace(_settings.Value.FishVoiceId);
+    private bool TtsReady => _fish.CanReplace && _settings.Value.EnableTts && (!_settings.Value.EchoCancellationEnabled || _aec?.Ready==true) && !string.IsNullOrWhiteSpace(_settings.GetApiKey()) && !string.IsNullOrWhiteSpace(_settings.Value.FishVoiceId);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> _webStatus = new();
 
     public AppHost()
     {
         // An explicit preview launcher enables AEC without altering saved stable settings.
-        _settings.Value.ExperimentalEchoReference = Environment.GetCommandLineArgs().Contains("--echo-cancel");
-        if (_settings.Value.ExperimentalEchoReference) _aec = new AecHelper();
+        if (Environment.GetCommandLineArgs().Contains("--echo-cancel")) _settings.Value.EchoCancellationEnabled=true;
+        _aec = new AecHelper(_settings);
         _overlay = new OverlayWindow(_settings);
         _pipeline = new TextPipeline(_settings.Value);
         _router = new SessionRouter(ev =>
@@ -43,7 +43,9 @@ public sealed class AppHost : IDisposable
             else if(ev.Type=="start")_muter.Restore();
             _pipeline.Handle(ev);
         });
-        _fish = new FishTtsClient(_settings);
+        _fish = new FishTtsClient(_settings, new AudioPlayback(_aec));
+        _aec.BargeIn += () => _pipeline.InterruptAll();
+        _aec.Failed += reason => { _fish.Interrupt(); _muter.Restore(); };
         _fish.Failed += reason =>
         {
             _muter.Restore();
@@ -71,7 +73,8 @@ public sealed class AppHost : IDisposable
             codexScanMs = _codex.LastScanMs,
             codexError = _codex.LastError,
             web = _webStatus
-        }, () => TtsReady, () => _aec?.Ready == true);
+        }, () => TtsReady, () => TtsReady && _settings.Value.EchoCancellationEnabled && _aec?.Ready == true);
+        _server.EchoEnabled=()=>_settings.Value.EchoCancellationEnabled;
         _pipeline.CaptionChanged += text => System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
         {
             _overlay.SetCaption(text);
@@ -155,7 +158,7 @@ public sealed class AppHost : IDisposable
         });
         _tray = new Forms.NotifyIcon
         {
-            Text = "VoiceBridge 0.3.0 Beta",
+            Text = "VoiceBridge " + RuntimeProfile.Version,
             Icon = TrayArtwork.Create(),
             Visible = true,
             ContextMenuStrip = menu
@@ -168,6 +171,7 @@ public sealed class AppHost : IDisposable
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
             if (_settingsWindow is not null) { _settingsWindow.Activate(); return; }
+            var oldAudioRoute=($"{_settings.Value.EchoCancellationEnabled}|{_settings.Value.PhysicalMicrophone}|{_settings.Value.SpeakerDevice}");
             var window = new SettingsWindow(_settings);
             _settingsWindow = window;
             window.Closed += (_, _) => _settingsWindow=null;
@@ -175,6 +179,7 @@ public sealed class AppHost : IDisposable
             if (window.ShowDialog() == true)
             {
                 _overlay.ApplyAppearance();
+                if(oldAudioRoute!=$"{_settings.Value.EchoCancellationEnabled}|{_settings.Value.PhysicalMicrophone}|{_settings.Value.SpeakerDevice}") _fish.Retry();
                 if (!TtsReady) { _fish.Interrupt(); _muter.Restore(); }
                 ShowBalloon("设置已保存", "新的字幕与 Fish Audio 设置已生效。", Forms.ToolTipIcon.Info);
             }

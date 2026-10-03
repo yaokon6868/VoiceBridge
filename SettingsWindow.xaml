@@ -16,6 +16,7 @@
       <Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
         <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
         <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
         <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
@@ -37,7 +38,16 @@
       <Slider x:Name="BackgroundOpacity" Grid.Row="8" Grid.Column="1" Minimum="0" Maximum="0.9"/>
       <CheckBox x:Name="MouseThrough" Grid.Row="9" Grid.ColumnSpan="2" Content="鼠标穿透（从托盘设置位置）" Margin="0,12,0,4"/>
       <CheckBox x:Name="WatchCodex" Grid.Row="10" Grid.ColumnSpan="2" Content="监听普通版和隔离版 Codex 桌面" Margin="0,4"/>
-      <StackPanel Grid.Row="11" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
+      <StackPanel Grid.Row="11" Grid.ColumnSpan="2" Margin="0,14,0,0">
+        <CheckBox x:Name="EchoCancellation" Content="外放回声处理（0.3.1 测试功能，保留语音打断）"/>
+        <TextBlock Text="需要 VB-CABLE。麦克风保持开启，仅处理 VoiceBridge 播放的声音。" TextWrapping="Wrap" Foreground="#64748B" Margin="5,4"/>
+        <TextBlock Text="实际麦克风名称（留空使用当前默认麦克风）" Margin="5,5"/>
+        <ComboBox x:Name="PhysicalMic" IsEditable="True" Padding="8"/>
+        <TextBlock Text="声音出口名称（留空使用当前默认设备）" Margin="5,5"/>
+        <ComboBox x:Name="SpeakerName" IsEditable="True" Padding="8"/>
+        <TextBlock Text="修改后保存，并重新开始网页语音。处理组件失效时自动恢复原始收音。" TextWrapping="Wrap" Foreground="#64748B" Margin="5,7"/>
+      </StackPanel>
+      <StackPanel Grid.Row="12" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
         <Button Content="字幕预览" Margin="0,0,10,0" Click="Preview_Click"/>
         <Button Content="取消" Width="90" Margin="0,0,10,0" IsCancel="True"/>
         <Button Content="保存设置" Width="100" Background="#3769EB" Foreground="White" IsDefault="True" Click="Save_Click"/>

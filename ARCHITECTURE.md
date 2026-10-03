@@ -45,6 +45,26 @@ Events are validated for type, source, session and size. Health omits user paths
 - Speaker AEC remains unaccepted. PCM receipt or active microphone track alone does
   not establish audible output or successful echo removal.
 
-AEC reference classes remain in source for investigation. Python environments and
-virtual drivers are not bundled; normal execution does not start them. Do not use
---echo-cancel with the public ZIP. No system audio loopback capture is used.
+## 0.3.1 candidate: duplex audio ownership
+
+The optional bundled engine owns Fish speaker playback and physical microphone
+capture in one 48-kHz duplex callback. The exact rendered PCM is its echo
+reference. No system loopback is opened. A partitioned linear adaptive filter
+and WebRTC residual control produce the virtual microphone stream. Independent
+near-end energy is preserved; the microphone is never muted during playback.
+
+Device timestamps alone were unreliable on the maintainer's WASAPI driver.
+Reference/microphone correlation therefore estimates acoustic delay when
+confidence is sufficient. Correlation also prevents cold-start speaker echo
+from being treated as an interruption. Neither metric alone proves useful AEC.
+
+PCM IPC on loopback 17896 requires a random per-helper token; website Origins
+are refused. Eight seconds of queued audio is a hard bound. Backpressure awaits
+space without holding the generation lock; interrupts can cancel immediately.
+Epochs reject old audio. Helper loss, stale callbacks or a failed virtual input
+disables replacement. A stable browser audio track switches to the already-open
+physical fallback when helper readiness expires, without ending the Voice call.
+
+VB-CABLE remains an external prerequisite, not a bundled or automatically
+installed driver. The candidate test launcher uses --candidate for separate
+settings; the 0.3.0 Release and daily desktop shortcut remain available.

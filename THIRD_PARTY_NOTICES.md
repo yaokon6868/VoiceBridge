@@ -14,5 +14,9 @@ not bundled models or services, and their terms still apply.
 
 The self-contained release includes the .NET runtime's license and notices
 as supplied by `dotnet publish`. Project license texts are bundled in `licenses/`.
-Python AEC experiments and virtual audio drivers
-are not bundled in the public release.
+The 0.3.0 release does not bundle Python. Optional 0.3.1 candidate AEC packages
+include Python (PSF), pywebrtc-audio (Apache-2.0), sounddevice and PortAudio
+(MIT), NumPy and its bundled libraries, cffi (MIT), pycparser (BSD), and the
+PyInstaller bootloader (GPL with its distribution exception). Exact installed
+license texts and dependency notices are copied under app/aec/licenses.
+Virtual audio drivers are never bundled.

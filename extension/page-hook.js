@@ -3,25 +3,77 @@
   window.__voiceBridgeHooked = true;
   const emit = (detail) => window.postMessage({ source: "voice-bridge-page", ...detail }, "*");
   let aecReadyUntil=0;
+  let aecEnabled=false;
+  const micRoutes=new Set();
   window.addEventListener('message',e=>{
-    if(e.source===window && e.origin===location.origin && e.data?.source==='voice-bridge-aec')
+    if(e.source===window && e.origin===location.origin && e.data?.source==='voice-bridge-aec'){
       aecReadyUntil=e.data.ready?Date.now()+6000:0;
+      aecEnabled=!!e.data.enabled || !!e.data.ready;
+      for(const route of micRoutes)route.update();
+    }
   });
+  setInterval(()=>{for(const route of micRoutes)route.update();},500);
   const media=globalThis.navigator?.mediaDevices;
   if(media?.getUserMedia){
     const original=media.getUserMedia.bind(media);
     media.getUserMedia=async constraints=>{
-      let selected=constraints;
-      if(constraints?.audio && Date.now()<aecReadyUntil){
-        const devices=await media.enumerateDevices();
-        const cable=devices.find(d=>d.kind==='audioinput' && /^CABLE Output \(VB-Audio Virtual Cable\)$/i.test(d.label));
-        if(cable){
-          selected={...constraints,audio:{...(typeof constraints.audio==='object'?constraints.audio:{}),
-            deviceId:{exact:cable.deviceId},autoGainControl:false,echoCancellation:false,noiseSuppression:false}};
-        }else emit({kind:'microphone-status',state:'virtual-input-not-found'});
-      }
       try{
-        const stream=await original(selected);
+        let stream=await original(constraints);
+        const isCable=track=>/^CABLE Output \(VB-Audio Virtual Cable\)$/i.test(track.label);
+        // A previous preview may have left Chrome's default on the virtual mic.
+        // Acquire a real fallback before using the cleaned stream; never return
+        // an unpowered virtual track when the helper is absent.
+        if(constraints?.audio && stream.getAudioTracks().some(isCable)){
+          const devices=await media.enumerateDevices();
+          const physical=devices.find(d=>d.kind==='audioinput' && !['default','communications'].includes(d.deviceId) && /microphone|麦克风/i.test(d.label) && !/cable|virtual/i.test(d.label));
+          if(!physical)throw new Error('Physical microphone not found');
+          const replacement=await original({...constraints,audio:{deviceId:{exact:physical.deviceId},echoCancellation:true}});
+          stream.getTracks().forEach(t=>t.stop());stream=replacement;
+        }
+        if(constraints?.audio && aecEnabled && window.AudioContext){
+          const devices=await media.enumerateDevices();
+          const cable=devices.find(d=>d.kind==='audioinput' && /^CABLE Output \(VB-Audio Virtual Cable\)$/i.test(d.label));
+          if(cable){
+            let ctx,virtual,source,closed=false,busy=false,usingVirtual=false,retryAt=0;
+            try{
+              ctx=new window.AudioContext();await ctx.resume();
+              if(ctx.state!=='running')throw new Error('Audio graph did not start');
+              const destination=ctx.createMediaStreamDestination();
+              const physical=stream;
+              const connect=input=>{source?.disconnect();source=ctx.createMediaStreamSource(input);source.connect(destination);};
+              connect(physical);
+              const report=()=>emit({kind:'microphone-status',state:'live',virtual:usingVirtual,
+                label:usingVirtual?'CABLE Output (VB-Audio Virtual Cable)':physical.getAudioTracks()[0]?.label});
+              const route={async update(){
+                if(closed || busy)return;
+                if(Date.now()>=aecReadyUntil){
+                  if(usingVirtual){connect(physical);usingVirtual=false;virtual?.getTracks().forEach(t=>t.stop());virtual=null;report();}
+                  return;
+                }
+                if(usingVirtual || Date.now()<retryAt)return;
+                busy=true;
+                try{
+                  const next=await original({audio:{deviceId:{exact:cable.deviceId},autoGainControl:false,echoCancellation:false,noiseSuppression:false}});
+                  if(closed || Date.now()>=aecReadyUntil){next.getTracks().forEach(t=>t.stop());return;}
+                  virtual=next;connect(next);usingVirtual=true;report();
+                  next.getAudioTracks()[0]?.addEventListener('ended',()=>{
+                    if(!closed && usingVirtual){connect(physical);usingVirtual=false;retryAt=Date.now()+2000;report();}
+                  },{once:true});
+                }catch{retryAt=Date.now()+2000;emit({kind:'microphone-status',state:'physical-fallback',virtual:false});}
+                finally{busy=false;}
+              }};
+              const output=destination.stream;
+              for(const video of physical.getVideoTracks())output.addTrack(video);
+              const cleanup=()=>{if(closed)return;closed=true;micRoutes.delete(route);source?.disconnect();
+                physical.getTracks().forEach(t=>t.stop());virtual?.getTracks().forEach(t=>t.stop());ctx.close();};
+              for(const track of output.getAudioTracks()){
+                const stop=track.stop.bind(track);track.stop=()=>{cleanup();stop();};
+                track.addEventListener('ended',cleanup,{once:true});
+              }
+              micRoutes.add(route);await route.update();return output;
+            }catch{virtual?.getTracks().forEach(t=>t.stop());ctx?.close();emit({kind:'microphone-status',state:'physical-fallback',virtual:false});}
+          }else emit({kind:'microphone-status',state:'virtual-input-not-found'});
+        }
         for(const track of stream.getAudioTracks()){
           const settings=track.getSettings();
           emit({kind:'microphone-status',state:'live',label:track.label,
