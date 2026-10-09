@@ -1,6 +1,6 @@
 # VoiceBridge
 
-**给 ChatGPT Voice 换声音、加实时字幕的 Windows 工具。**
+**让 ChatGPT Voice 用你喜欢的音色回答，同时显示实时悬浮字幕。**
 
 我经常用 ChatGPT 语音聊天，希望它能用自己喜欢的音色回答，也希望讲话时能看到字幕，于是做了这个项目。
 
@@ -16,15 +16,33 @@
 
 如果你也经常使用 ChatGPT Voice，欢迎试用、反馈问题，或者参与改进。喜欢这个方向，也欢迎给项目一个 ⭐。
 
-[下载测试版](https://github.com/yaokon6868/VoiceBridge/releases/tag/v0.3.0-beta) · [反馈问题](https://github.com/yaokon6868/VoiceBridge/issues)
+[下载 Windows 测试版](https://github.com/yaokon6868/VoiceBridge/releases/tag/v0.3.0-beta) · [详细使用说明](docs/USER_GUIDE.md) · [使用场景与支持范围](docs/USE_CASES.md) · [反馈问题](https://github.com/yaokon6868/VoiceBridge/issues)
 
 主干正在开发 **0.3.1 候选版**，新增外放回声处理架构和收音故障恢复。
 尚未通过真实外放与语音打断验收；日常下载仍为 0.3.0 Beta。
 进展与测试记录见 [0.3.1 外放处理说明](docs/AEC-031.md)。
 
-**当前为 0.3.0 Beta。** 已在维护者电脑上验证网页采集和换声；外放回声消除、
-两套 Codex 的完整兼容性和长时间稳定性仍需测试。本项目与 OpenAI、Fish Audio
-没有官方隶属关系。
+## 先选对版本
+
+| 版本 | 获取方式 | 适合谁 |
+|---|---|---|
+| **0.3.0 Beta** | Releases 中的 Windows ZIP | 想安装体验网页换声、字幕的用户；首次建议戴耳机 |
+| **0.3.1 候选版** | 当前开发源码 `main`；尚无公开候选安装包 | 参与外放回声、收音恢复和桌面兼容性验证的开发者 |
+
+截至 **2026-10-09**，公开下载仍为 0.3.0 Beta。源码更新不等于下载包同步升级。
+网页采集和换声已在维护者环境中验证；两套 Codex 的完整兼容性、外放回声与长时间稳定性仍需测试。
+本项目与 OpenAI、Fish Audio 没有官方隶属关系。
+
+## 可以拿来做什么
+
+- **个性化 AI 语音聊天**：用选好的 Fish 音色听 ChatGPT Voice 回答。
+- **边听边看**：通过置顶字幕核对名称、术语或长回复中的重点。
+- **学习与语言练习**：向 ChatGPT 提问、练习对话，同时看助手回复字幕。
+- **开发时听助手回复**：尝试普通版、隔离版 Codex 桌面采集；需分别验证。
+
+当前核心是“助手文字 → 字幕与指定音色朗读”，不是把原始音频直接改音色。
+微信、QQ、B站视频、任意文章朗读和麦克风直接变声尚未正式接入。
+各场景的操作、边界及后续扩展方向见 [使用场景说明](docs/USE_CASES.md)。
 
 ## 功能
 
@@ -38,12 +56,15 @@
 
 ## 安装（无需编程）
 
-1. 下载 Releases 的 `VoiceBridge-Windows-x64.zip`，**完整解压**。
+需要 Windows 11 x64、Chrome、可使用 ChatGPT Voice 的账号、麦克风和声音输出设备。
+首次体验建议使用耳机。其他系统、ARM64 原生运行和其他浏览器尚未列入已验证支持。
+
+1. 下载 Releases 的 `VoiceBridge-Windows-x64.zip`，**完整解压**。不要把 Source code 或 `VoiceBridge-Source.zip` 当作安装包。
 2. 双击 `Install.cmd`，安装到 `%LOCALAPPDATA%\VoiceBridge`，不需要管理员权限。
 3. 桌面出现 **启动换声工具**，以后只需双击这个入口。
 4. Chrome 打开 `chrome://extensions`，开启开发者模式，选择“加载已解压的扩展程序”，
    选择 `%LOCALAPPDATA%\VoiceBridge\extension`，只启用一个 VoiceBridge 扩展。
-5. 双击右下角声波托盘图标，填写自己的 Fish API Key 和 Voice / Reference ID，保存。
+5. 双击右下角声波托盘图标，填写自己的 Fish API Key 和 Voice / Reference ID，勾选“启用 Fish Audio 流式朗读”，保存。
 6. 刷新 ChatGPT 网页，开启语音，说一句新话。扩展弹窗分别显示连接和语音状态。
 
 Windows x64 发布包自带 .NET 运行时，无需另外安装 .NET。
@@ -51,6 +72,12 @@ Windows x64 发布包自带 .NET 运行时，无需另外安装 .NET。
 Fish 网站/PWA 不必启动；程序直接连接 Fish WebSocket 服务。
 免费 API 仍需要账号密钥，可用性以 [Fish 官方说明](https://fish.audio/blog/s2-1-pro-free-api/)
 为准，不承诺永久免费。
+
+截至 2026-10-09，Fish 公布的免费窗口至 2026-11-30，受公平使用规则约束，没有可用性或延迟保证。
+当前免费开发者入口无需绑卡；本工具不会自动改用付费模型。
+
+不知道去哪里拿 Key、音色 ID，或找不到程序？请看 [逐步使用指南](docs/USER_GUIDE.md)，
+其中包含日常启停、字幕调整、两套 Codex 接入、升级和按症状排查。
 
 可选开机启动：执行 `Install.cmd -StartWithWindows`。
 重新执行普通 `Install.cmd` 会关闭本安装创建的开机启动项。
@@ -78,7 +105,8 @@ Fish 网站/PWA 不必启动；程序直接连接 Fish WebSocket 服务。
 配置保存在 `%USERPROFILE%\.voicebridge-next\settings.json`，升级保留。
 API Key 使用当前 Windows 用户 DPAPI 加密，不能直接复制到另一台电脑使用。
 
-卸载：运行安装目录中的 `Uninstall.cmd`，再手动移除 Chrome 扩展。
+卸载：默认安装运行安装目录中的 `Uninstall.cmd`，再手动移除 Chrome 扩展。
+自定义安装位置的卸载限制见 [详细指南](docs/USER_GUIDE.md)。
 卸载保留个人设置；需要彻底清除时自行删除上述配置文件夹。
 旧预览用户升级前应退出旧程序、停用旧扩展和旧开机启动项。
 
