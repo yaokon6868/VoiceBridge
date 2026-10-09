@@ -5,12 +5,24 @@ namespace VoiceBridge;
 public partial class SettingsWindow : Window
 {
     private readonly SettingsStore _store;
+    private readonly string? _programDirectory;
     public event Action? PreviewRequested;
     private void Preview_Click(object sender, RoutedEventArgs e) => PreviewRequested?.Invoke();
     public SettingsWindow(SettingsStore store)
     {
         InitializeComponent();
         _store = store;
+        Title = $"VoiceBridge {RuntimeProfile.Version} · 设置";
+        VersionText.Text = $"当前版本：{RuntimeProfile.Version}";
+        StartupProfileText.Text = RuntimeProfile.IsCandidate ? "启动配置：候选测试" : "启动配置：日常";
+        DesktopStartupText.Text = RuntimeProfile.DesktopCapture
+            ? "自动桌面接入：启动时已请求"
+            : "自动桌面接入：启动时未请求";
+        var programPath = Environment.ProcessPath;
+        ProgramFilePath.Text = programPath ?? "无法获取当前程序路径";
+        _programDirectory = programPath is null ? null : Path.GetDirectoryName(programPath);
+        OpenProgramFolder.IsEnabled = !string.IsNullOrWhiteSpace(_programDirectory);
+        SettingsDirectory.Text = RuntimeProfile.SettingsRoot;
         var s = store.Value;
         ApiKey.Password = store.GetApiKey();
         VoiceId.Text = s.FishVoiceId;
@@ -25,6 +37,25 @@ public partial class SettingsWindow : Window
         PhysicalMic.Text = s.PhysicalMicrophone;
         SpeakerName.Text = s.SpeakerDevice;
         _=LoadAudioDevicesAsync();
+    }
+
+    private void OpenProgramFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_programDirectory)) return;
+        try
+        {
+            var startInfo = new System.Diagnostics.ProcessStartInfo(
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"))
+            {
+                UseShellExecute = true
+            };
+            startInfo.ArgumentList.Add(_programDirectory);
+            System.Diagnostics.Process.Start(startInfo);
+        }
+        catch
+        {
+            System.Windows.MessageBox.Show("无法打开程序文件夹，请复制上方程序路径后在文件资源管理器中查找。", "VoiceBridge", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
     }
 
     private async Task LoadAudioDevicesAsync()

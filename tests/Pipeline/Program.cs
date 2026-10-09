@@ -71,3 +71,48 @@ const string prefix = "先把这一段完整读出来，";
 Send("text", prefix + "旧的尾巴");
 Send("text", prefix + "新的尾巴和追加内容"); Send("complete"); await Task.Delay(300);
 Check(string.Concat(spoken) == prefix + "新的尾巴和追加内容", "revision preserves already submitted prefix without dropping new tail");
+
+spoken.Clear(); Send("interrupt"); Send("start");
+const string remaining = "尾段需要完整保留";
+Send("text", prefix + remaining);
+Send("text", "提示：" + prefix + remaining + "以及最后补充");
+Send("complete"); await Task.Delay(300);
+Check(string.Concat(spoken) == prefix + remaining + "以及最后补充", "insertion before spoken prefix does not replay prefix or shift unread tail");
+
+spoken.Clear(); Send("interrupt"); Send("start");
+const string removable = "临时提示：";
+Send("text", removable + prefix + remaining);
+Send("text", prefix + remaining + "以及最后补充");
+Send("complete"); await Task.Delay(300);
+Check(string.Concat(spoken) == removable + prefix + remaining + "以及最后补充", "deletion before spoken boundary preserves every unread character");
+
+spoken.Clear(); Send("interrupt"); Send("start");
+const string editedPrefix = "我们现在一起解释方案，";
+Send("text", editedPrefix + "原来的尾部文字");
+Send("text", "我们先一起说明方案，更新后的尾部必须完整保留");
+Send("complete"); await Task.Delay(300);
+Check(string.Concat(spoken) == editedPrefix + "更新后的尾部必须完整保留", "edits on both sides of the boundary preserve the new unread tail");
+
+spoken.Clear(); Send("interrupt"); Send("start");
+Send("text", prefix + "待续");
+Send("text", prefix[..^1] + ", -42是后续数字。");
+Send("complete"); await Task.Delay(300);
+Check(string.Concat(spoken) == prefix + " -42是后续数字。", "punctuation revision never consumes an unread numeric minus sign");
+
+spoken.Clear(); Send("interrupt"); Send("start");
+Send("text", editedPrefix + "原来的尾部文字");
+Send("text", "我们先一起说明方案，更新后的尾部必须完整保留");
+Send("complete"); await Task.Delay(300);
+
+var snapshotMethod = typeof(TextPipeline).GetMethod("Snapshot");
+Check(snapshotMethod is not null, "pipeline exposes content-free per-turn completeness counts");
+if (snapshotMethod is not null)
+{
+    var metadata = System.Text.Json.JsonSerializer.Serialize(snapshotMethod.Invoke(pipeline, null));
+    using var json = System.Text.Json.JsonDocument.Parse(metadata);
+    var current = json.RootElement.GetProperty("current");
+    Check(current.GetProperty("emittedChars").GetInt32() == string.Concat(spoken).Length
+        && current.GetProperty("pendingChars").GetInt32() == 0,
+        "diagnostics distinguish emitted characters from rebased snapshot cursor");
+    Check(!metadata.Contains(editedPrefix) && !metadata.Contains("更新后的尾部"), "pipeline diagnostics never include transcript contents");
+}

@@ -11,7 +11,7 @@ async function bridgeRequest(path,options={}) {
       const info=health.ok?await health.json():null;
       if(info?.service==='VoiceBridge Next' && info.version==='0.3.0-preview' && info.instanceId){sessionToken='legacy-preview';return;}
     }
-    if(!r.ok)throw Error('Bridge pairing failed');sessionToken=(await r.json()).token;
+    if(!r.ok)throw Object.assign(Error('Bridge pairing failed'),{code:`pairing-${r.status}`});sessionToken=(await r.json()).token;
     if(typeof sessionToken!=='string' || !sessionToken)throw Error('Invalid bridge session');
   }).finally(()=>{pairing=null;});
   for(let attempt=0;attempt<2;attempt++){
@@ -21,7 +21,7 @@ async function bridgeRequest(path,options={}) {
     if(r.status===401){sessionToken='';continue;}
     return r;
   }
-  throw Error('Bridge authorization failed');
+  throw Object.assign(Error('Bridge authorization failed'),{code:'authorization-failed'});
 }
 async function reconnectPages() {
   const tabs=await chrome.tabs.query({url:['https://chatgpt.com/*','https://chat.openai.com/*']});
@@ -63,7 +63,7 @@ chrome.tabs.onUpdated.addListener((id,change)=>{if(change.status==='loading')set
 chrome.tabs.onRemoved.addListener(id=>{chrome.storage.session.remove(`mute-${id}`).catch(()=>{});});
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
   if(!sender.tab && sender.id===chrome.runtime.id && ['health','diagnostics'].includes(message.kind)){
-    bridgeRequest(message.kind).then(async r=>{if(!r.ok)throw Error();reply({ok:true,...await r.json()});}).catch(()=>reply({ok:false}));
+    bridgeRequest(message.kind).then(async r=>{if(!r.ok)throw Object.assign(Error(),{code:`request-${r.status}`});reply({ok:true,...await r.json()});}).catch(error=>reply({ok:false,error:error.code||'bridge-unreachable'}));
     return true;
   }
   if(message.kind==='reconnect' && !sender.tab && sender.id===chrome.runtime.id){

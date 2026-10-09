@@ -20,3 +20,4 @@ status.json
 *.pem
 .venv/
 __pycache__/
+docs/LOCAL_WORKING_STATE.md

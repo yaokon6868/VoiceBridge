@@ -8,6 +8,9 @@ public sealed class TextPipeline : IDisposable
     private string? _active;
     private string _snapshot = "";
     private int _submittedLength;
+    private long _turnSerial;
+    private int _emittedPhrases, _emittedChars, _revisionCount, _alignmentLimited, _completeEvents;
+    private object? _previous;
     private const int UnpunctuatedMinimum = 16;
     private readonly StringBuilder _pending = new();
     private CancellationTokenSource? _delay;
@@ -24,6 +27,7 @@ public sealed class TextPipeline : IDisposable
             {
                 if (_active == key) return;
                 Reset(); _active = key;
+                _turnSerial++;
                 CaptionChanged?.Invoke("");
                 return;
             }
@@ -36,6 +40,7 @@ public sealed class TextPipeline : IDisposable
             if (_active != key) return;
             if (ev.Type == "complete")
             {
+                _completeEvents++;
                 // Some accessibility providers expose 'complete' while text is still
                 // arriving. Coalesce repeated completion notifications too.
                 if (_pending.Length > 0 && !_completing) Schedule(200, true);
@@ -50,6 +55,9 @@ public sealed class TextPipeline : IDisposable
                 {
                     // DOM snapshots can revise punctuation or words before the tail.
                     // Rebuild only text not yet submitted, rather than dropping the update.
+                    _revisionCount++;
+                    _submittedLength = TextSnapshotCursor.Rebase(_snapshot, ev.Text, _submittedLength, out var limited);
+                    if (limited) _alignmentLimited++;
                     _snapshot = ev.Text;
                     _pending.Clear();
                     _pending.Append(ev.Text[Math.Min(_submittedLength, ev.Text.Length)..]);
@@ -79,7 +87,7 @@ public sealed class TextPipeline : IDisposable
                 var sentence = _pending.ToString(0, boundary);
                 _pending.Remove(0, boundary);
                 _submittedLength += boundary;
-                PhraseReady?.Invoke(sentence);
+                Emit(sentence);
             }
             if (_pending.Length > 0) Schedule(900, false);
         }
@@ -103,7 +111,7 @@ public sealed class TextPipeline : IDisposable
                     // Keep tiny fragments until punctuation or actual completion.
                     if (!completing && _pending.Length < UnpunctuatedMinimum) return;
                     var phrase = _pending.ToString(); _submittedLength += _pending.Length; _pending.Clear(); _completing = false;
-                    if (!string.IsNullOrWhiteSpace(phrase)) PhraseReady?.Invoke(phrase);
+                    if (!string.IsNullOrWhiteSpace(phrase)) Emit(phrase);
                 }
             }
             catch (OperationCanceledException) { }
@@ -111,10 +119,25 @@ public sealed class TextPipeline : IDisposable
     }
     private void Reset()
     {
+        if (_active is not null) _previous = Describe(ended: true);
         _delay?.Cancel(); _delay?.Dispose(); _delay = null;
         _active = null; _snapshot = ""; _submittedLength = 0; _pending.Clear(); _completing = false;
+        _emittedPhrases = _emittedChars = _revisionCount = _alignmentLimited = _completeEvents = 0;
         Interrupted?.Invoke();
     }
+    private void Emit(string phrase)
+    {
+        _emittedPhrases++; _emittedChars += phrase.Length;
+        PhraseReady?.Invoke(phrase);
+    }
+    private object Describe(bool ended = false) => new {
+        turnSerial = _turnSerial, active = !ended && _active is not null,
+        snapshotChars = _snapshot.Length, cursorChars = _submittedLength,
+        pendingChars = _pending.Length, emittedPhrases = _emittedPhrases, emittedChars = _emittedChars,
+        revisionCount = _revisionCount, alignmentLimited = _alignmentLimited,
+        completeEvents = _completeEvents
+    };
+    public object Snapshot() { lock (_sync) return new { current = Describe(), previous = _previous }; }
     public void InterruptAll() { lock (_sync) Reset(); }
     public void Dispose() => InterruptAll();
 }

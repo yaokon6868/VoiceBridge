@@ -5,9 +5,10 @@ function Invoke-Check([string]$Program,[string[]]$Arguments) {
     if($LASTEXITCODE -ne 0){throw "Check failed: $Program $($Arguments -join ' ')"}
 }
 Invoke-Check 'dotnet' @('build',(Join-Path $checkRoot 'VoiceBridge.csproj'),'-c','Release')
-foreach($project in @('Transport','Pipeline','Bridge')) {
+foreach($project in @('Transport','Pipeline','Bridge','Desktop','Startup','Completeness')) {
     Invoke-Check 'dotnet' @('run','--project',(Join-Path $checkRoot "tests\$project\$project.csproj"),'-c','Release')
 }
+Invoke-Check 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $checkRoot 'tests\Startup\LauncherPolicy.Tests.ps1'))
 Invoke-Check 'node' @((Join-Path $checkRoot 'tests\Extension\turn-tracker.cjs'),(Join-Path $checkRoot 'extension\turn-tracker.js'))
 Invoke-Check 'node' @((Join-Path $checkRoot 'tests\Extension\content-lifecycle.cjs'),(Join-Path $checkRoot 'extension'))
 Invoke-Check 'node' @((Join-Path $checkRoot 'tests\Extension\web-hook-test.cjs'),(Join-Path $checkRoot 'extension\page-hook.js'))
@@ -16,5 +17,5 @@ Invoke-Check 'node' @((Join-Path $checkRoot 'tests\Extension\bridge-client.cjs')
 foreach($file in Get-ChildItem -LiteralPath (Join-Path $checkRoot 'extension') -Filter '*.js') {
     Invoke-Check 'node' @('--check',$file.FullName)
 }
-Write-Output 'All offline checks passed. No Fish API requests were made.'
 Invoke-Check 'node' @((Join-Path $checkRoot 'tests\Extension\microphone-route.cjs'),(Join-Path $checkRoot 'extension\page-hook.js'))
+Write-Output 'All offline checks passed. No Fish API requests were made.'

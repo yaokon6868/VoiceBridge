@@ -17,10 +17,17 @@ public sealed class BridgeServer : IDisposable
     private readonly Func<bool> _ttsReady;
     private readonly Func<bool> _aecReady;
     public Func<bool> EchoEnabled { get; set; } = () => false;
+    public Action? ShutdownRequested { get; set; }
+    public Action? SettingsRequested { get; set; }
     private WebApplication? _app;
     private readonly string _instanceId = Guid.NewGuid().ToString("N");
     private readonly int _port;
     private readonly ConnectionGuard _guard = new();
+    private long _paired, _pairingRejected, _unauthorized;
+    public object ConnectionDiagnostics => new {
+        paired = Interlocked.Read(ref _paired), pairingRejected = Interlocked.Read(ref _pairingRejected),
+        unauthorized = Interlocked.Read(ref _unauthorized)
+    };
     public BridgeServer(Action<BridgeEvent> receive, Func<object>? diagnostics = null, Func<bool>? ttsReady = null, Func<bool>? aecReady = null, int port = RuntimeProfile.Port)
     {
         _receive = receive;
@@ -42,15 +49,37 @@ public sealed class BridgeServer : IDisposable
             context.Response.Headers.CacheControl="no-store";
             if(context.Request.Path=="/session")
             {
-                if(context.Request.Method!="POST" || !_guard.TrustedBootstrap(context.Request)) { context.Response.StatusCode=403; return; }
+                if(context.Request.Method!="POST" || !_guard.TrustedBootstrap(context.Request)) { Interlocked.Increment(ref _pairingRejected); context.Response.StatusCode=403; return; }
+                Interlocked.Increment(ref _paired);
                 await context.Response.WriteAsJsonAsync(new { token=_guard.Token }); return;
             }
-            if(!_guard.Authorized(context.Request)) { context.Response.StatusCode=401; return; }
+            if(!_guard.Authorized(context.Request)) { Interlocked.Increment(ref _unauthorized); context.Response.StatusCode=401; return; }
             await next(context);
         });
         _app.UseWebSockets();
-        _app.MapGet("/health", () => Results.Json(new { ok = true, service = "VoiceBridge Next", version = RuntimeProfile.Version, instanceId = _instanceId, ttsReady = _ttsReady(), aecReady = _aecReady(), aecEnabled=EchoEnabled() }));
+        _app.MapGet("/health", () => Results.Json(new { ok = true, service = "VoiceBridge Next", version = RuntimeProfile.Version, instanceId = _instanceId, ttsReady = _ttsReady(), aecReady = _aecReady(), aecEnabled=EchoEnabled(),
+            startup = new { profile = RuntimeProfile.IsCandidate ? "candidate" : "standard",
+                desktopRequested = RuntimeProfile.DesktopCapture, background = RuntimeProfile.Background } }));
         _app.MapGet("/diagnostics", () => Results.Json(_diagnostics?.Invoke() ?? new { }));
+        _app.MapPost("/show-settings", (HttpContext context) =>
+        {
+            if (context.Request.Headers.Origin.ToString().Length != 0 ||
+                context.Request.Headers["X-VoiceBridge-Client"] != "launcher") return Results.StatusCode(403);
+            if (SettingsRequested is null) return Results.NotFound();
+            SettingsRequested();
+            return Results.Ok();
+        });
+        _app.MapPost("/shutdown", (HttpContext context) =>
+        {
+            // Authenticated native launcher only; extensions/pages cannot quit
+            // the app even when they hold a valid bridge token.
+            if (context.Request.Headers.Origin.ToString().Length != 0 ||
+                context.Request.Headers["X-VoiceBridge-Client"] != "launcher") return Results.StatusCode(403);
+            var shutdown = ShutdownRequested;
+            if (shutdown is null) return Results.NotFound();
+            _ = Task.Run(async () => { await Task.Delay(200); shutdown(); });
+            return Results.Accepted();
+        });
         _app.MapPost("/event", (BridgeEvent ev) => { if(!ValidEvent(ev))return Results.BadRequest(); _receive(ev); return Results.Ok(); });
         _app.Map("/ws", async context =>
         {
@@ -91,8 +120,15 @@ public sealed class BridgeServer : IDisposable
 
     public void Dispose()
     {
-        if (_app is null) return;
-        try { _app.StopAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult(); } catch { }
-        _app.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        var app = Interlocked.Exchange(ref _app, null);
+        if (app is null) return;
+        // WPF OnExit cannot pump async continuations. Start host cleanup on the
+        // pool, not the UI context, and bound the final wait so exit cannot hang.
+        var cleanup = Task.Run(async () =>
+        {
+            try { await app.StopAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false); } catch { }
+            await app.DisposeAsync().ConfigureAwait(false);
+        });
+        try { cleanup.Wait(TimeSpan.FromSeconds(5)); } catch (AggregateException) { }
     }
 }

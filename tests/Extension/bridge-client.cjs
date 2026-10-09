@@ -24,6 +24,7 @@ const text=()=>new Promise(resolve=>receive({kind:'event',event:{type:'text',ses
   assert.equal(requests.some(r=>JSON.stringify(r.opts.body||'').includes('Bearer')),false);
   console.log('PASS: extension pairs, authenticates, renews after restart, and submits each event once');
   deny=true;load();assert.equal((await popup('health')).ok,false);
+  assert.equal((await popup('health')).error,'pairing-403');
   console.log('PASS: denied bootstrap cannot downgrade authentication');
   deny=false;legacy=true;load();assert.equal((await popup('health')).ok,true);
   unknown=true;load();assert.equal((await popup('health')).ok,false);

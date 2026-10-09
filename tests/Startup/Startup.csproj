@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework><OutputType>Exe</OutputType><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../RuntimeProfile.cs" Link="RuntimeProfile.cs" />
+    <Compile Include="../../ExistingInstanceActivation.cs" Link="ExistingInstanceActivation.cs" Condition="Exists('../../ExistingInstanceActivation.cs')" />
+  </ItemGroup>
+</Project>

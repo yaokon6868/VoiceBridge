@@ -8,6 +8,8 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);artifacts/**;release/**;ui-stage/**;ui-before-change/**</DefaultItemExcludes>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>VoiceBridge.Next</AssemblyName>
+    <Version>0.3.1-candidate</Version>
+    <FileVersion>0.3.1.0</FileVersion>
     <RootNamespace>VoiceBridge</RootNamespace>
   </PropertyGroup>
   <ItemGroup>

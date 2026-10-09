@@ -58,6 +58,31 @@ await fish.SpeakAsync("Bounded playback backpressure.");await Until(()=>playback
 await Task.Delay(450);Check(fish.CanReplace,"playback backpressure is not a silent Fish server");
 fish.Interrupt();playback.Hold.TrySetResult(true);playback.Hold=null;
 await Task.Delay(100);Check(playback.Bytes==0,"interrupt cancels a pending asynchronous playback enqueue");
+var progressMethod=typeof(FishTtsClient).GetMethod("ProgressSnapshot");
+Check(progressMethod is not null,"Fish exposes per-generation send and audio progress without transcript contents");
+if(progressMethod is not null){
+    System.Text.Json.JsonElement Progress(){var data=System.Text.Json.JsonSerializer.Serialize(progressMethod.Invoke(fish,null));return System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(data);}
+    fish.Retry();modes.Enqueue("audio");
+    const string phraseOne="Completeness diagnostic phrase one.";
+    const string phraseTwo="Completeness diagnostic phrase two.";
+    await fish.SpeakAsync(phraseOne);await fish.SpeakAsync(phraseTwo);
+    await Until(()=>Progress().GetProperty("current").GetProperty("acceptedAudioChunks").GetInt64()==2);
+    var summary=Progress();var current=summary.GetProperty("current");
+    Check(current.GetProperty("sentPhrases").GetInt64()==2 && current.GetProperty("sentChars").GetInt64()==phraseOne.Length+phraseTwo.Length
+        && current.GetProperty("pendingPhrases").GetInt64()==0 && current.GetProperty("flushes").GetInt64()==2,"Fish progress proves both phrases were sent and flushed");
+    Check(current.GetProperty("acceptedAudioBytes").GetInt64()==playback.Bytes,"audio progress counts accepted PCM rather than assuming playback completed");
+    Check(!summary.ToString().Contains(phraseOne) && !summary.ToString().Contains("test-only"),"Fish progress never contains text or API keys");
+    fish.Interrupt();summary=Progress();
+    Check(summary.GetProperty("current").GetProperty("sentPhrases").GetInt64()==0
+        && summary.GetProperty("previous").GetProperty("sentPhrases").GetInt64()==2,"old generation retains its own counts without contaminating the next turn");
+    fish.Retry();modes.Enqueue("audio");playback.AfterAccepted=()=>fish.Interrupt();
+    await fish.SpeakAsync("Cancellation immediately after a successful enqueue.");
+    await Until(()=>Progress().GetProperty("previous").GetProperty("receivedAudioChunks").GetInt64()==1);
+    await Task.Delay(50);summary=Progress();playback.AfterAccepted=null;
+    Check(summary.GetProperty("previous").GetProperty("acceptedAudioChunks").GetInt64()==1
+        && summary.GetProperty("current").GetProperty("acceptedAudioChunks").GetInt64()==0,
+        "enqueue accepted immediately before cancellation is counted in the old generation");
+}
 await app.StopAsync();
 var routed=new List<BridgeEvent>();var router=new SessionRouter(routed.Add);
 router.Handle(new("start","web","one"));
@@ -69,6 +94,15 @@ router.Handle(new("start","web","two"));router.Handle(new("text","web","one","St
 Check(routed.Count==2,"stale session text cannot re-enter playback");
 router.Handle(new("text","web","two","New reply."));router.Handle(new("interrupt","web","two"));
 Check(routed[^1].Type=="interrupt","active user interruption is forwarded immediately");
+var handoffs=new List<BridgeEvent>();var handoffRouter=new SessionRouter(handoffs.Add);
+handoffRouter.Handle(new("start","web","reply-a"));handoffRouter.Handle(new("text","web","reply-a","First source."));
+handoffRouter.Handle(new("start","codex-isolated","reply-b"));handoffRouter.Handle(new("text","codex-isolated","reply-b","New active source."));
+handoffRouter.Handle(new("text","web","reply-a","Late old source."));
+handoffRouter.Handle(new("start","web","reply-a"));handoffRouter.Handle(new("text","web","reply-a","Repeated old source."));
+handoffRouter.Handle(new("text","codex-isolated","reply-b","New active source continues."));
+Check(handoffs.Count(x=>x.Type=="start")==2 && handoffs.Skip(4).All(x=>x.Source=="codex-isolated"),"late text from a replaced reply cannot repeatedly reclaim playback");
+handoffRouter.Handle(new("start","web","reply-c"));handoffRouter.Handle(new("text","web","reply-c","A genuinely new reply."));
+Check(handoffs.Count(x=>x.Type=="start")==3 && handoffs[^1].SessionId=="reply-c","a new reply from the previous source can legitimately take over again");
 using var phrasesPipeline=new TextPipeline(new AppSettings());
 var phraseOutput=new List<string>();phrasesPipeline.PhraseReady+=text=>{lock(phraseOutput)phraseOutput.Add(text);};
 phrasesPipeline.Handle(new("start","fragments","one"));
@@ -85,11 +119,12 @@ sealed class FakePlayback : IAudioPlayback {
     private readonly object sync=new();public long Epoch;public int Bytes;public int Resets;
     public event Action<string>? Failed {add{} remove{}}
     public TaskCompletionSource<bool>? Hold;public bool Waiting;
+    public Action? AfterAccepted;
     public long BeginTurn(){lock(sync){Bytes=0;return ++Epoch;}}
     public long ResetDevice(){lock(sync){Resets++;Bytes=0;return ++Epoch;}}
     public void EnsureStarted(bool echo,long epoch){}
     public bool Enqueue(byte[] pcm,long epoch){lock(sync){if(epoch!=Epoch)return false;Bytes+=pcm.Length;return true;}}
-    public async ValueTask<bool> EnqueueAsync(byte[] pcm,long epoch,CancellationToken token){var hold=Hold;if(hold is not null){Waiting=true;await hold.Task.WaitAsync(token);}token.ThrowIfCancellationRequested();return Enqueue(pcm,epoch);}
+    public async ValueTask<bool> EnqueueAsync(byte[] pcm,long epoch,CancellationToken token){var hold=Hold;if(hold is not null){Waiting=true;await hold.Task.WaitAsync(token);}token.ThrowIfCancellationRequested();var accepted=Enqueue(pcm,epoch);if(accepted)AfterAccepted?.Invoke();return accepted;}
     public object Snapshot()=>new{Bytes,Epoch};
     public void Stop()=>BeginTurn();public void Dispose(){}
 }

@@ -23,24 +23,34 @@ public sealed class AppHost : IDisposable
     private long _sourceTextEvents;
     private long _phrases;
     private readonly EventJournal _journal = new();
+    private readonly DesktopEchoRoute _desktopRoute = new();
+    private readonly DesktopSpeechGate _desktopGate = new();
+    private Task? _desktopRouteMonitor;
+    private int _desktopRoutePaused;
+    private bool DesktopRouteReady => _aec?.Ready == true && _desktopRoute.Read().Connected;
     private bool TtsReady => _fish.CanReplace && _settings.Value.EnableTts && (!_settings.Value.EchoCancellationEnabled || _aec?.Ready==true) && !string.IsNullOrWhiteSpace(_settings.GetApiKey()) && !string.IsNullOrWhiteSpace(_settings.Value.FishVoiceId);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> _webStatus = new();
 
     public AppHost()
     {
-        // An explicit preview launcher enables AEC without altering saved stable settings.
-        if (Environment.GetCommandLineArgs().Contains("--echo-cancel")) _settings.Value.EchoCancellationEnabled=true;
+        // Launcher flags may initialize a new profile, but saved choices are authoritative.
+        _settings.Value.EchoCancellationEnabled = RuntimeProfile.EchoCancellationForStartup(
+            _settings.Value.EchoCancellationEnabled, File.Exists(SettingsStore.SettingsPath),
+            Environment.GetCommandLineArgs().Contains("--echo-cancel"));
         _aec = new AecHelper(_settings);
         _overlay = new OverlayWindow(_settings);
         _pipeline = new TextPipeline(_settings.Value);
         _router = new SessionRouter(ev =>
         {
-            if(ev.Source.StartsWith("codex", StringComparison.OrdinalIgnoreCase))
+            if (ev.Type == "start")
             {
-                if(ev.Type=="start" && TtsReady)_muter.MuteDesktopApps();
-                else if(ev.Type is "stop" or "interrupt")_muter.Restore();
+                var allowed = _desktopGate.Begin(ev.Source, _settings.Value.EchoCancellationEnabled,
+                    !_settings.Value.EchoCancellationEnabled || DesktopRouteReady);
+                if (!allowed) PauseDesktopReplacement();
+                else Interlocked.Exchange(ref _desktopRoutePaused, 0);
             }
-            else if(ev.Type=="start")_muter.Restore();
+            if (ev.Type is "stop" or "interrupt") _desktopGate.End();
+            SynchronizeDesktopMute();
             _pipeline.Handle(ev);
         });
         _fish = new FishTtsClient(_settings, new AudioPlayback(_aec));
@@ -55,7 +65,10 @@ public sealed class AppHost : IDisposable
         _codex = new CodexAccessibilityWatcher(Receive);
         _server = new BridgeServer(Receive, () => new {
             sourceEvents = Interlocked.Read(ref _sourceEvents),
+            bridgeConnection = _server!.ConnectionDiagnostics,
             sourceTextEvents = Interlocked.Read(ref _sourceTextEvents),
+            textPipeline = _pipeline.Snapshot(),
+            synthesisProgress = _fish.ProgressSnapshot(),
             fishStatus = _fish.Status,
             fallbackReason = _fish.FaultReason,
             ttsReady = TtsReady,
@@ -68,19 +81,30 @@ public sealed class AppHost : IDisposable
             playback = _fish.PlaybackStatus,
             recentEvents = _journal.Snapshot(),
             echoCancellation = _aec?.Status(),
+            desktopEchoRoute = _settings.Value.EchoCancellationEnabled ? _desktopRoute.Read() : null,
+            desktopReplacementPaused = Volatile.Read(ref _desktopRoutePaused) != 0,
+            desktopOfficialAudio = _muter.Status(),
             codexScans = _codex.Scans,
             codexActive = _codex.ActiveSources,
             codexScanMs = _codex.LastScanMs,
             codexError = _codex.LastError,
+            desktopTranscript = new { snapshots = _codex.TextSnapshots, revisions = _codex.TextRevisions,
+                transientFrames = _codex.TransientFrames },
             web = _webStatus
         }, () => TtsReady, () => TtsReady && _settings.Value.EchoCancellationEnabled && _aec?.Ready == true);
         _server.EchoEnabled=()=>_settings.Value.EchoCancellationEnabled;
+        _server.ShutdownRequested = () => System.Windows.Application.Current.Dispatcher.BeginInvoke(
+            new Action(() => System.Windows.Application.Current.Shutdown()));
+        _server.SettingsRequested = () => System.Windows.Application.Current.Dispatcher.BeginInvoke(OpenSettings);
         _pipeline.CaptionChanged += text => System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
         {
             _overlay.SetCaption(text);
             _overlay.SetVisible(text.Length > 0);
         });
-        _pipeline.PhraseReady += text => { Interlocked.Increment(ref _phrases); _ = _fish.SpeakAsync(text); };
+        _pipeline.PhraseReady += text => {
+            if (!DesktopReplacementAllowed()) { PauseDesktopReplacement(); return; }
+            Interlocked.Increment(ref _phrases); _ = _fish.SpeakAsync(text);
+        };
         _pipeline.Interrupted += () =>
         {
             _fish.Interrupt();
@@ -91,6 +115,14 @@ public sealed class AppHost : IDisposable
     public void Start()
     {
         _aec?.Start();
+        _desktopRouteMonitor = Task.Run(async () => {
+            while (!_stop.IsCancellationRequested)
+            {
+                if (!DesktopReplacementAllowed()) PauseDesktopReplacement();
+                SynchronizeDesktopMute();
+                try { await Task.Delay(100, _stop.Token); } catch (OperationCanceledException) { break; }
+            }
+        });
         CreateTray();
         _ = Task.Run(async () =>
         {
@@ -98,11 +130,32 @@ public sealed class AppHost : IDisposable
             catch (Exception ex) { ShowBalloon("启动失败", $"本地桥接端口 {RuntimeProfile.Port} 无法启动：{ex.Message}"); }
         });
         if (RuntimeProfile.DesktopCapture && _settings.Value.WatchCodexDesktop) _codex.Start();
-        if (string.IsNullOrWhiteSpace(_settings.GetApiKey()) || string.IsNullOrWhiteSpace(_settings.Value.FishVoiceId))
+        if (!RuntimeProfile.Background && (string.IsNullOrWhiteSpace(_settings.GetApiKey()) || string.IsNullOrWhiteSpace(_settings.Value.FishVoiceId)))
         {
             ShowBalloon("VoiceBridge 已启动", "字幕功能已就绪。请打开设置填写 Fish Audio API Key 和 Voice ID。", Forms.ToolTipIcon.Info);
             System.Windows.Application.Current.Dispatcher.BeginInvoke(OpenSettings);
         }
+    }
+
+    private bool DesktopReplacementAllowed() => !_desktopGate.IsDesktop ||
+        _desktopGate.Allow(_settings.Value.EchoCancellationEnabled,
+            !_settings.Value.EchoCancellationEnabled || DesktopRouteReady);
+
+    private void SynchronizeDesktopMute(bool voiceStarting = false)
+    {
+        var active = _codex.IsRunning && (_codex.ActiveSources > 0 || voiceStarting);
+        var blocked = _desktopGate.IsDesktop && Volatile.Read(ref _desktopRoutePaused) != 0;
+        if (DesktopMutePolicy.ShouldMute(active, TtsReady, _settings.Value.EchoCancellationEnabled,
+            !_settings.Value.EchoCancellationEnabled || DesktopRouteReady, blocked)) _muter.MuteDesktopApps();
+        else if (_muter.HasLease) _muter.Restore();
+    }
+
+    private void PauseDesktopReplacement()
+    {
+        if (Interlocked.Exchange(ref _desktopRoutePaused, 1) != 0) return;
+        _fish.Interrupt(); _muter.Restore();
+        System.Windows.Application.Current.Dispatcher.BeginInvoke(() => ShowBalloon("桌面外放换声暂停",
+            "未确认 Codex 使用处理后的虚拟麦克风。请选择 CABLE Output 输入并开始一轮新回复；字幕和麦克风继续工作。", Forms.ToolTipIcon.Warning));
     }
 
     private void Receive(BridgeEvent ev)
@@ -122,6 +175,13 @@ public sealed class AppHost : IDisposable
             if (ev.Type == "text") Interlocked.Increment(ref _sourceTextEvents);
         }
         _journal.Record(ev);
+        // Router start is intentionally deferred until actual text. Official
+        // audio must be suppressed earlier, when the voice UI becomes active.
+        if (ev.Type == "start" && ev.Source.StartsWith("codex", StringComparison.OrdinalIgnoreCase))
+        {
+            if (_settings.Value.EchoCancellationEnabled) _desktopRoute.Read(refresh: true);
+            SynchronizeDesktopMute(voiceStarting: true);
+        }
         _router.Handle(ev);
     }
 
@@ -166,11 +226,19 @@ public sealed class AppHost : IDisposable
         _tray.DoubleClick += (_, _) => OpenSettings();
     }
 
+    public void RequestSettings() => System.Windows.Application.Current.Dispatcher.BeginInvoke(OpenSettings);
+
     private void OpenSettings()
     {
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
-            if (_settingsWindow is not null) { _settingsWindow.Activate(); return; }
+            if (_settingsWindow is not null)
+            {
+                if (_settingsWindow.WindowState == WindowState.Minimized)
+                    _settingsWindow.WindowState = WindowState.Normal;
+                _settingsWindow.Activate();
+                return;
+            }
             var oldAudioRoute=($"{_settings.Value.EchoCancellationEnabled}|{_settings.Value.PhysicalMicrophone}|{_settings.Value.SpeakerDevice}");
             var window = new SettingsWindow(_settings);
             _settingsWindow = window;
@@ -203,6 +271,7 @@ public sealed class AppHost : IDisposable
         _settingsWindow?.Close();
         _overlay.Close();
         _stop.Cancel();
+        try { _desktopRouteMonitor?.Wait(1500); } catch (AggregateException) { }
         _codex.Dispose();
         _server.Dispose();
         _pipeline.Dispose();

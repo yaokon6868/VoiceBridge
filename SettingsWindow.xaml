@@ -21,7 +21,24 @@
         <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
         <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
       </Grid.RowDefinitions>
-      <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,0,24"><TextBlock Text="VoiceBridge" FontSize="30" FontWeight="Bold"/><TextBlock Text="实时字幕 · 自然换声" Foreground="#64748B" Margin="0,5,0,0"/><TextBlock Text="Fish Audio  /  仅使用免费模型" Foreground="#3769EB" Margin="0,18,0,0"/></StackPanel>
+      <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,0,24">
+        <TextBlock Text="VoiceBridge" FontSize="30" FontWeight="Bold"/>
+        <TextBlock Text="实时字幕 · 自然换声" Foreground="#64748B" Margin="0,5,0,0"/>
+        <Border Background="#E6EEFF" CornerRadius="8" Padding="12" Margin="0,15,0,0">
+          <StackPanel>
+            <TextBlock x:Name="VersionText" FontWeight="SemiBold" FontSize="15"/>
+            <TextBlock x:Name="StartupProfileText" Foreground="#3769EB" Margin="0,5,0,0"/>
+            <TextBlock x:Name="DesktopStartupText" TextWrapping="Wrap" Foreground="#64748B" Margin="0,5,0,0"/>
+            <TextBlock Text="当前运行的程序文件" Margin="0,12,0,4"/>
+            <TextBox x:Name="ProgramFilePath" IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="Wrap" FontSize="11" MaxHeight="70" VerticalScrollBarVisibility="Auto"/>
+            <Button x:Name="OpenProgramFolder" Content="打开程序文件夹" HorizontalAlignment="Left" Margin="0,7,0,0" Click="OpenProgramFolder_Click"/>
+            <TextBlock Text="当前配置目录" Margin="0,12,0,4"/>
+            <TextBox x:Name="SettingsDirectory" IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="Wrap" FontSize="11" MaxHeight="70" VerticalScrollBarVisibility="Auto"/>
+            <TextBlock Text="路径可选中后按 Ctrl+C 复制。以上为启动配置，组件和语音接通状态需实际检查。" TextWrapping="Wrap" Foreground="#64748B" FontSize="11" Margin="0,7,0,0"/>
+          </StackPanel>
+        </Border>
+        <TextBlock Text="Fish Audio  /  仅使用免费模型" Foreground="#3769EB" Margin="0,18,0,0"/>
+      </StackPanel>
       <TextBlock Grid.Row="1" Text="API Key" VerticalAlignment="Center"/>
       <PasswordBox x:Name="ApiKey" Grid.Row="1" Grid.Column="1" Margin="0,5"/>
       <TextBlock Grid.Row="2" Text="Voice / Reference ID" VerticalAlignment="Center"/>
@@ -45,7 +62,7 @@
         <ComboBox x:Name="PhysicalMic" IsEditable="True" Padding="8"/>
         <TextBlock Text="声音出口名称（留空使用当前默认设备）" Margin="5,5"/>
         <ComboBox x:Name="SpeakerName" IsEditable="True" Padding="8"/>
-        <TextBlock Text="修改后保存，并重新开始网页语音。处理组件失效时自动恢复原始收音。" TextWrapping="Wrap" Foreground="#64748B" Margin="5,7"/>
+        <TextBlock Text="网页：保存后重新开始语音。Codex 桌面：须使用 CABLE Output 虚拟麦克风；仅勾选此选项不会切换桌面输入设备。未接通时暂停桌面换声，保留字幕和原声。" TextWrapping="Wrap" Foreground="#64748B" Margin="5,7"/>
       </StackPanel>
       <StackPanel Grid.Row="12" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
         <Button Content="字幕预览" Margin="0,0,10,0" Click="Preview_Click"/>

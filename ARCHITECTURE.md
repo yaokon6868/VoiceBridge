@@ -17,6 +17,8 @@ flowchart LR
 
 - Idle start events cannot claim playback. Valid assistant text selects the turn.
 - Stale sessions and idle sources cannot cancel the active source.
+- Replaced source/session pairs are retired in a bounded table; genuinely new
+  turns use a new session ID. Late text from a retired pair cannot reclaim audio.
 - Captions and synthesis share text without waiting for one another.
 - Phrase boundaries and quiet timeouts preserve existing comma behavior.
 - Playback epochs reject late audio. Uncertain interrupted phrases are not replayed.
@@ -25,6 +27,11 @@ flowchart LR
 - DOM tracking preserves a long answer when a committed message changes identity and
   no new user message appeared. Later real turns can repeat the same answer.
 - API Key uses Windows DPAPI and is never logged.
+- Committed text positions are rebased when snapshots are edited. Prefix
+  insertions/deletions and punctuation revisions have regression coverage;
+  wholesale rewrites or semantic moves are outside the current guarantee.
+- Per-generation diagnostics contain counts and timestamps, not response text.
+  Audio accepted by a playback queue does not by itself prove audible completion.
 
 ## Local protocol
 
@@ -40,6 +47,9 @@ Events are validated for type, source, session and size. Health omits user paths
 - Offline transport, pipeline, DOM lifecycle, network hook and mute ownership tests.
 - Bridge authorization, website rejection, validation and WebSocket closure tests.
 - Maintainer computer: user-confirmed previous working build's web captions and Fish output.
+- 2026-10-09: a three-part, 96-character local source traversed the real free Fish
+  and speaker path; the maintainer heard all three parts exactly once. This
+  does not verify the live web or either Codex source adapter.
 - Pending current candidate: real browser authorization after upgrade, both Codex
   distributions, device changes, 30-minute use, spoken barge-in and repeated UI exit.
 - Speaker AEC remains unaccepted. PCM receipt or active microphone track alone does
@@ -66,5 +76,6 @@ disables replacement. A stable browser audio track switches to the already-open
 physical fallback when helper readiness expires, without ending the Voice call.
 
 VB-CABLE remains an external prerequisite, not a bundled or automatically
-installed driver. The candidate test launcher uses --candidate for separate
-settings; the 0.3.0 Release and daily desktop shortcut remain available.
+installed driver. Release v0.3.1-beta retains the internal 0.3.1-candidate identity
+and separate settings profile. The previous v0.3.0-beta stays available on GitHub
+for rollback; only one local VoiceBridge instance should be running.

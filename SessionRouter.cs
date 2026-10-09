@@ -5,6 +5,8 @@ public sealed class SessionRouter
 {
     private readonly Action<BridgeEvent> _forward;
     private readonly Dictionary<string,string> _latest = new();
+    private readonly HashSet<(string Source, string Session)> _retired = new();
+    private readonly Queue<(string Source, string Session)> _retiredOrder = new();
     private readonly object _sync = new();
     private string? _activeSource, _activeSession;
     public SessionRouter(Action<BridgeEvent> forward) => _forward = forward;
@@ -14,6 +16,7 @@ public sealed class SessionRouter
         {
             if(ev.Type=="start")
             {
+                if (_retired.Contains((ev.Source, ev.SessionId))) return;
                 if(_latest.Count >= 32 && !_latest.ContainsKey(ev.Source))return;
                 _latest[ev.Source]=ev.SessionId; return;
             }
@@ -22,6 +25,14 @@ public sealed class SessionRouter
             {
                 if(_activeSource!=ev.Source || _activeSession!=ev.SessionId)
                 {
+                    if (_activeSource is not null && _activeSession is not null)
+                    {
+                        var previous = (_activeSource, _activeSession);
+                        if (_retired.Add(previous)) _retiredOrder.Enqueue(previous);
+                        if (_retiredOrder.Count > 64) _retired.Remove(_retiredOrder.Dequeue());
+                        if (_latest.TryGetValue(_activeSource, out var latest) && latest == _activeSession)
+                            _latest.Remove(_activeSource);
+                    }
                     _activeSource=ev.Source;_activeSession=ev.SessionId;
                     _forward(ev with {Type="start",Text=null});
                 }

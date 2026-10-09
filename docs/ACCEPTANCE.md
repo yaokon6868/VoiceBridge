@@ -11,6 +11,7 @@ Never mark real-device checks complete based only on offline tests.
 | Fish faults unlock official voice | Transport/mute | Pending |
 | Spoken interruption clears old audio | Router/epochs | Pending |
 | Normal and isolated Codex | Source isolation | Pending both end-to-end |
+| Full local three-part text through real Fish playback | Completeness, revised cursors, late-session retirement | User heard all 96 characters across three marked parts once, 2026-10-09; not live-source acceptance |
 | No white popup after exit | Cleanup code | Pending 10 exit/relaunch cycles |
 | Wrong/removed input or output device | Partial metadata | Pending |
 | 30-minute session and restarts | Partial reconnect | Pending |
@@ -19,6 +20,12 @@ Never mark real-device checks complete based only on offline tests.
 
 Before stable release test on a second Windows 11 PC. Record first text, first
 Fish byte and first audible audio separately; network latency is not audible latency.
+
+The v0.3.1-beta preparation retains the internally named candidate build and its
+settings profile. Offline and package checks are release gates; they do not
+change the pending real-device statuses above. The 2026-10-09 local Fish check
+reported its first received audio at about 1.86 seconds on the second attempt;
+this is one observation, not a latency guarantee or an audible latency measurement.
 
 Publication-preparation checks on 2026-10-03: clean source export build, complete
 offline suite, self-contained x64 ZIP, isolated installation and upgrade, unchanged

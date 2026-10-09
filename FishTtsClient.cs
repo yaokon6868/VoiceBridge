@@ -17,6 +17,10 @@ public sealed class FishTtsClient : IDisposable
     private readonly TimeSpan _firstAudioTimeout;
     private long _playbackEpoch;
     private string _fault = "";
+    private long _progressSerial;
+    private SynthesisProgress _progress = new(0, 0);
+    private SynthesisProgress? _previousProgress;
+    public object ProgressSnapshot() { lock (_generationLock) return new { current = _progress.Snapshot(), previous = _previousProgress?.Snapshot() }; }
     public bool CanReplace => string.IsNullOrEmpty(Volatile.Read(ref _fault));
     public string FaultReason => Volatile.Read(ref _fault);
     public event Action<string>? Failed;
@@ -26,6 +30,7 @@ public sealed class FishTtsClient : IDisposable
         lock (_generationLock)
         {
             Interrupt(); _playbackEpoch = _playback.ResetDevice(); _fault = ""; Status = "idle";
+            _progress.Epoch = _playbackEpoch;
         }
     }
     private Task? _receiver;
@@ -80,7 +85,13 @@ public sealed class FishTtsClient : IDisposable
         }
         CancellationToken token;
         long epoch;
-        lock (_generationLock) { if (!CanReplace) return; token = _generation.Token; epoch = _playbackEpoch; }
+        SynthesisProgress progress;
+        lock (_generationLock) {
+            if (!CanReplace) return;
+            token = _generation.Token; epoch = _playbackEpoch; progress = _progress;
+            Interlocked.Increment(ref progress.RequestedPhrases); Interlocked.Add(ref progress.RequestedChars, text.Length);
+            Interlocked.Increment(ref progress.PendingPhrases); Interlocked.Add(ref progress.PendingChars, text.Length);
+        }
         Interlocked.CompareExchange(ref _firstTextTimestamp, System.Diagnostics.Stopwatch.GetTimestamp(), 0);
         {
             var before = AudioBytes;
@@ -104,9 +115,12 @@ public sealed class FishTtsClient : IDisposable
             await _gate.WaitAsync(token);
             acquired = true;
             token.ThrowIfCancellationRequested();
-            var socket = await EnsureConnectedAsync(token, epoch);
+            var socket = await EnsureConnectedAsync(token, epoch, progress);
             await SendAsync(socket, new Dictionary<string, object?> { ["event"] = "text", ["text"] = text }, token);
+            Interlocked.Increment(ref progress.SentPhrases); Interlocked.Add(ref progress.SentChars, text.Length);
+            Interlocked.Exchange(ref progress.LastSendUtcMs, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             await SendAsync(socket, new Dictionary<string, object?> { ["event"] = "flush" }, token);
+            Interlocked.Increment(ref progress.Flushes);
         }
         catch (OperationCanceledException)
         {
@@ -117,10 +131,13 @@ public sealed class FishTtsClient : IDisposable
             if (token.IsCancellationRequested) return;
             FailFor(token, Status.StartsWith("handshake-failed:") ? Status : "connection-failed:" + ex.GetType().Name);
         }
-        finally { if (acquired) _gate.Release(); }
+        finally {
+            Interlocked.Decrement(ref progress.PendingPhrases); Interlocked.Add(ref progress.PendingChars, -text.Length);
+            if (acquired) _gate.Release();
+        }
     }
 
-    private async Task<ClientWebSocket> EnsureConnectedAsync(CancellationToken token, long epoch)
+    private async Task<ClientWebSocket> EnsureConnectedAsync(CancellationToken token, long epoch, SynthesisProgress progress)
     {
         ClientWebSocket socket;
         lock (_generationLock)
@@ -159,7 +176,7 @@ public sealed class FishTtsClient : IDisposable
         }, token);
         Interlocked.Increment(ref Connections);
         Status = "connected";
-        _receiver = ReceiveLoopAsync(socket, token, epoch);
+        _receiver = ReceiveLoopAsync(socket, token, epoch, progress);
         return socket;
     }
 
@@ -171,7 +188,7 @@ public sealed class FishTtsClient : IDisposable
         await socket.SendAsync(bytes, WebSocketMessageType.Binary, true, timeout.Token);
     }
 
-    private async Task ReceiveLoopAsync(ClientWebSocket socket, CancellationToken token, long epoch)
+    private async Task ReceiveLoopAsync(ClientWebSocket socket, CancellationToken token, long epoch, SynthesisProgress progress)
     {
         var chunk = new byte[128 * 1024];
         try
@@ -183,7 +200,7 @@ public sealed class FishTtsClient : IDisposable
                 do
                 {
                     result = await socket.ReceiveAsync(chunk, token);
-                    if (result.MessageType == WebSocketMessageType.Close) { if (!token.IsCancellationRequested) Status = "server-closed"; return; }
+                    if (result.MessageType == WebSocketMessageType.Close) { Interlocked.Exchange(ref progress.ReceiverClosed, 1); if (!token.IsCancellationRequested) Status = "server-closed"; return; }
                     data.Write(chunk, 0, result.Count);
                 } while (!result.EndOfMessage);
                 var map = MessagePackSerializer.Deserialize<Dictionary<string, object>>(data.ToArray(), _options);
@@ -193,16 +210,19 @@ public sealed class FishTtsClient : IDisposable
                     var failed = kind?.ToString() == "error" || (map.TryGetValue("reason", out var reason) && reason?.ToString() == "error");
                     if (failed) Interlocked.Increment(ref ServerErrors);
                     if (failed) FailFor(token, "server-error");
-                    else Status = "session-finished";
+                    else { Interlocked.Exchange(ref progress.ServerFinished, 1); Status = "session-finished"; }
                     return;
                 }
                 if (TryGetAudio(map, out var audio))
                 {
+                    Interlocked.Increment(ref progress.ReceivedAudioChunks); Interlocked.Add(ref progress.ReceivedAudioBytes, audio.Length);
                     bool accepted;
                     Interlocked.Increment(ref _buffering);
                     try { accepted=await _playback.EnqueueAsync(audio,epoch,token); }
                     finally { Interlocked.Decrement(ref _buffering); }
-                    if(!accepted)continue;
+                    if(!accepted) { Interlocked.Increment(ref progress.RejectedAudioChunks); continue; }
+                    Interlocked.Increment(ref progress.AcceptedAudioChunks); Interlocked.Add(ref progress.AcceptedAudioBytes, audio.Length);
+                    Interlocked.Exchange(ref progress.LastAudioUtcMs, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                     lock (_generationLock)
                     {
                         if(token.IsCancellationRequested)return;
@@ -249,6 +269,9 @@ public sealed class FishTtsClient : IDisposable
             _generation = new CancellationTokenSource();
             ResetSocket();
             _playbackEpoch = _playback.BeginTurn();
+            Interlocked.Exchange(ref _progress.Cancelled, 1);
+            if (Interlocked.Read(ref _progress.RequestedPhrases) > 0 || Interlocked.Read(ref _progress.ReceivedAudioChunks) > 0) _previousProgress = _progress;
+            _progress = new SynthesisProgress(++_progressSerial, _playbackEpoch);
             Status = "interrupted";
             Interlocked.Exchange(ref _firstTextTimestamp, 0);
             FirstAudioMs = null;

@@ -11,11 +11,11 @@ Get-Process 'VoiceBridge.Next' -ErrorAction SilentlyContinue | Where-Object {$_.
     if(!$_.WaitForExit(5000)){throw 'The installed application did not exit.'}
 }
 New-Item -ItemType Directory -Path $InstallRoot -Force | Out-Null
-foreach($directory in @('app','extension','scripts','licenses')){
+foreach($directory in @('app','extension','scripts','licenses','docs')){
     New-Item -ItemType Directory -Path (Join-Path $InstallRoot $directory) -Force | Out-Null
     Copy-Item -Path (Join-Path $packageRoot "$directory\*") -Destination (Join-Path $InstallRoot $directory) -Recurse -Force
 }
-foreach($file in @('README.md','LICENSE','THIRD_PARTY_NOTICES.md','Uninstall.cmd')){
+foreach($file in @('README.md','CHANGELOG.md','ARCHITECTURE.md','CONTRIBUTING.md','SECURITY.md','LICENSE','THIRD_PARTY_NOTICES.md','Uninstall.cmd')){
     Copy-Item -LiteralPath (Join-Path $packageRoot $file) -Destination $InstallRoot -Force
 }
 $shortcutShell=New-Object -ComObject WScript.Shell
